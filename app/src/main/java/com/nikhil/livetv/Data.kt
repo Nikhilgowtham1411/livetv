@@ -43,8 +43,16 @@ val TELUGU_PRIORITY = listOf(
 )
 
 val KIDS_KW = listOf(
-    "cartoon network", "disney", "pogo", "nick", "hungama", "kushi", "sony yay", "discovery kids",
-    "chutti", "toon", "baby tv", "boomerang",
+    "cartoon network", "disney", "disney junior", "disney jr", "pogo", "nick", "sonic nickelodeon",
+    "nick jr", "hungama", "kushi tv", "sony yay", "sony yay!", "discovery kids", "etv bala bharat",
+    "super hungama", "chutti", "toon", "baby tv", "boomerang",
+)
+
+private val TELUGU_EXTRA_KW = listOf(
+    "zee telugu", "zee cinemalu", "gemini tv", "gemini movies", "gemini comedy", "gemini music",
+    "gemini life", "kushi tv", "maa tv", "maa movies", "maa music", "maa gold", "etv telugu",
+    "etv plus", "etv cinema", "etv life", "etv abhiruchi", "etv andhra", "etv telangana",
+    "telugu tv", "telugu news", "telugu entertainment", "telugu movies",
 )
 
 val DOC_KW = listOf(
@@ -74,7 +82,7 @@ val LANGS = listOf(
     Lang(
         "Telugu", "$BASE/languages/tel.m3u",
         extraUrl = "$BASE/countries/in.m3u",
-        extraKeywords = TELUGU_KW,
+        extraKeywords = TELUGU_EXTRA_KW,
         customKey = "telugu_custom",
         priority = TELUGU_PRIORITY,
     ),
