@@ -186,12 +186,15 @@ fun parseM3u(text: String): List<Channel> {
 
 object Repo {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
     private fun fetch(ctx: Context, url: String): String {
         val cache = File(ctx.cacheDir, "pl_" + url.hashCode() + ".m3u")
+        if (cache.exists() && System.currentTimeMillis() - cache.lastModified() < 8 * 60 * 60 * 1000L) {
+            return cache.readText()
+        }
         return try {
             val req = Request.Builder().url(url).build()
             client.newCall(req).execute().use { resp ->
@@ -276,27 +279,18 @@ object Repo {
         return list.filter { it.url in alive }
     }
 
-    /** Loads a playlist and keeps only channels that respond right now (cached for 45 min). */
+    /** Fast list loading: use known-good cache when available, otherwise show playlist entries immediately. */
     suspend fun loadWorking(ctx: Context, lang: Lang, onProgress: (Int, Int) -> Unit): Result<List<Channel>> {
         val r = load(ctx, lang)
         val all = r.getOrNull() ?: return r
-        val customUrls = lang.customKey?.let { k -> FavStore(ctx, k).load().map { it.url }.toSet() } ?: emptySet()
-        val base = all.filter { it.url !in customUrls }
-        val f =File(ctx.cacheDir, "alive_" + lang.label.hashCode() + ".txt")
+        val f = File(ctx.cacheDir, "alive_" + lang.label.hashCode() + ".txt")
         val fresh = f.exists() && System.currentTimeMillis() - f.lastModified() < 45 * 60 * 1000L
-        var alive: List<Channel> = emptyList()
-        if (fresh) {
-            val set = withContext(Dispatchers.IO) { f.readLines().toHashSet() }
-            alive = base.filter { it.url in set }
-        }
-        if (alive.isEmpty()) {
-            alive = filterAlive(base, onProgress)
-            if (alive.isNotEmpty()) {
-                withContext(Dispatchers.IO) { f.writeText(alive.joinToString("\n") { it.url }) }
-            }
-        }
-        val result = sortChannels(alive + all.filter { it.url in customUrls }, lang.priority)
-        return if (result.isEmpty()) Result.failure(Exception("No working channels right now")) else Result.success(result)
+        val knownAlive = if (fresh) {
+            val urls = withContext(Dispatchers.IO) { f.readLines().toHashSet() }
+            all.filter { it.url in urls }
+        } else emptyList()
+        val result = sortChannels(knownAlive.takeIf { it.isNotEmpty() } ?: all, lang.priority)
+        return if (result.isEmpty()) Result.failure(Exception("No channels in this playlist")) else Result.success(result)
     }
 }
 
