@@ -129,7 +129,7 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Live TV", color = Accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("NOVA  /  LIVE", color = Accent, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.width(24.dp))
             LazyRow(
                 modifier = Modifier.weight(1f),
@@ -162,11 +162,10 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     CircularProgressIndicator(color = Accent)
-                    if (progress.isNotEmpty()) {
-                        Spacer(Modifier.height(16.dp))
-                        Text(progress, color = Color.White, fontSize = 18.sp)
-                        Text("Hiding channels that don't work…", color = Color(0xFF9A9AB0), fontSize = 14.sp)
-                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text("Preparing your channel list", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Stream loading happens when you select a channel", color = Color(0xFF9AABBF), fontSize = 14.sp)
+                    if (progress.isNotEmpty()) Text(progress, color = Color(0xFF9AABBF), fontSize = 13.sp)
                 }
                 is Ui.Err -> Column(
                     Modifier.align(Alignment.Center),
@@ -242,10 +241,10 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
 
 @Composable
 fun ChannelCard(c: Channel, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Focusable(onClick = onClick, shape = RoundedCornerShape(14.dp), modifier = modifier.fillMaxWidth()) {
+    Focusable(onClick = onClick, shape = RoundedCornerShape(20.dp), modifier = modifier.fillMaxWidth()) {
         Column {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color(0xFF1E1E2C)),
+                Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color(0xFF18283A)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (c.logo != null) {
@@ -279,7 +278,7 @@ fun ChannelCard(c: Channel, modifier: Modifier = Modifier, onClick: () -> Unit) 
                 fontSize = 15.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).height(42.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).height(44.dp),
             )
         }
     }
