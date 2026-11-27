@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -38,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -50,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 
 sealed interface Ui {
     data object Loading : Ui
@@ -97,6 +100,7 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
     var retry by remember { mutableIntStateOf(0) }
     var ui by remember { mutableStateOf<Ui>(Ui.Loading) }
     var progress by remember { mutableStateOf("") }
+    val firstFocus = remember { FocusRequester() }
     var query by rememberSaveable { mutableStateOf("") }
     var quality by rememberSaveable { mutableIntStateOf(0) } // 0 all, 1 HD, 2 Full HD, 3 4K
     val cats = remember { listOf("★ Favourites", "Official Apps") + LANGS.map { it.label } }
@@ -123,31 +127,34 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
         }
     }
 
-    Row(Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 28.dp)) {
-        Column(Modifier.width(220.dp).fillMaxHeight()) {
-            Text("Live TV", color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(18.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 20.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Live TV", color = Accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(24.dp))
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp),
+            ) {
                 itemsIndexed(cats) { i, label ->
                     Focusable(
                         onClick = { sel = i },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(22.dp),
                         selected = i == sel,
                     ) {
                         Text(
                             label,
                             color = if (i == sel) Accent else Color.White,
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = if (i == sel) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
                         )
                     }
                 }
             }
         }
-        Spacer(Modifier.width(32.dp))
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val s = if (sel == 1) null else ui) {
                 null -> AppsGrid()
                 is Ui.Loading -> Column(
@@ -172,21 +179,21 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                     }
                 }
                 is Ui.Ok -> {
+                    LaunchedEffect(s.list) {
+                        delay(200)
+                        runCatching { firstFocus.requestFocus() }
+                    }
                     val minQ = when (quality) { 1 -> 720; 2 -> 1080; 3 -> 2160; else -> 0 }
                     val shown = s.list.filter {
                         (query.isBlank() || it.name.contains(query.trim(), ignoreCase = true)) &&
                             (minQ == 0 || qualityOf(it) >= minQ)
                     }
                     Column(Modifier.fillMaxSize()) {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            singleLine = true,
-                            placeholder = { Text("Search channel (maa, zee, history, kids…)") },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             listOf("All", "HD", "Full HD", "4K").forEachIndexed { i, label ->
                                 Focusable(
                                     onClick = { quality = i },
@@ -202,6 +209,14 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                                     )
                                 }
                             }
+                            Spacer(Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                singleLine = true,
+                                placeholder = { Text("Search channel") },
+                                modifier = Modifier.width(300.dp),
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                         if (shown.isEmpty()) {
@@ -215,7 +230,7 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             itemsIndexed(shown, key = { _, c -> c.url }) { i, c ->
-                                ChannelCard(c) { onPlay(shown, i) }
+                                ChannelCard(c, if (i == 0) Modifier.focusRequester(firstFocus) else Modifier) { onPlay(shown, i) }
                             }
                         }
                     }
@@ -226,8 +241,8 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
 }
 
 @Composable
-fun ChannelCard(c: Channel, onClick: () -> Unit) {
-    Focusable(onClick = onClick, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+fun ChannelCard(c: Channel, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Focusable(onClick = onClick, shape = RoundedCornerShape(14.dp), modifier = modifier.fillMaxWidth()) {
         Column {
             Box(
                 Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color(0xFF1E1E2C)),

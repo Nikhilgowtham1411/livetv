@@ -36,8 +36,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -47,6 +49,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 private const val DEFAULT_UA =
     "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
@@ -74,7 +77,11 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
             .setTrackSelector(
                 DefaultTrackSelector(ctx).also {
-                    it.setParameters(it.buildUponParameters().setForceHighestSupportedBitrate(true))
+                    it.setParameters(
+                        it.buildUponParameters()
+                            .setForceHighestSupportedBitrate(true)
+                            .setPreferredAudioLanguage("te")
+                    )
                 }
             )
             .build()
@@ -104,6 +111,9 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
     LaunchedEffect(index) {
         status = "Loading…"
         note = null
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .build()
         http.setUserAgent(ch.userAgent ?: DEFAULT_UA)
         http.setDefaultRequestProperties(ch.referrer?.let { mapOf("Referer" to it) } ?: emptyMap())
         exo.setMediaItem(MediaItem.fromUri(ch.url))
@@ -134,6 +144,25 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                         }
                         Key.DirectionDown, Key.ChannelDown -> {
                             index = (index - 1 + channels.size) % channels.size
+                            true
+                        }
+                        Key.DirectionLeft -> {
+                            val options = exo.currentTracks.groups
+                                .filter { it.type == C.TRACK_TYPE_AUDIO }
+                                .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
+                            if (options.size < 2) {
+                                note = "No other audio language in this channel"
+                            } else {
+                                val cur = options.indexOfFirst { (g, i) -> g.isTrackSelected(i) }.coerceAtLeast(0)
+                                val (g, i) = options[(cur + 1) % options.size]
+                                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                                    .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i))
+                                    .build()
+                                val f = g.getTrackFormat(i)
+                                val lang = f.language?.let { Locale(it).displayLanguage }?.takeIf { it.isNotBlank() }
+                                note = "Audio: " + (lang ?: f.label ?: "Track " + (((cur + 1) % options.size) + 1))
+                            }
+                            tick++
                             true
                         }
                         Key.DirectionRight -> {
@@ -192,7 +221,7 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "▲ / ▼  change channel     OK  favourite     ▶  add to Telugu list     Back  channel list",
+                    "▲ / ▼  change channel     OK  favourite     ◀  audio language     ▶  add to Telugu list     Back  channel list",
                     color = Color(0xFF9A9AB0),
                     fontSize = 15.sp,
                 )

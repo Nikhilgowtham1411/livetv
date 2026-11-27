@@ -34,6 +34,21 @@ data class Lang(
     val extraUrl: String? = null,
     val extraKeywords: List<String> = emptyList(),
     val customKey: String? = null,
+    val priority: List<String> = emptyList(),
+)
+
+val TELUGU_PRIORITY = listOf(
+    "star maa", "maa", "zee telugu", "zee", "gemini", "etv", "tv9", "ntv", "sakshi", "hmtv", "abn", "tv5",
+    "10tv", "v6", "studio n", "mahaa", "bhakti",
+)
+
+val KIDS_KW = listOf(
+    "cartoon network", "disney", "pogo", "nick", "hungama", "kushi", "sony yay", "discovery kids",
+    "chutti", "toon", "baby tv", "boomerang",
+)
+
+val DOC_KW = listOf(
+    "national geographic", "nat geo", "discovery", "history", "animal planet", "tlc", "sony bbc", "fyi",
 )
 
 val TELUGU_KW = listOf(
@@ -52,6 +67,7 @@ val LANGS = listOf(
         extraUrl = "$BASE/countries/in.m3u",
         extraKeywords = TELUGU_KW,
         customKey = "telugu_custom",
+        priority = TELUGU_PRIORITY,
     ),
     Lang(
         "Popular", "$BASE/countries/in.m3u",
@@ -60,9 +76,22 @@ val LANGS = listOf(
             "cartoon", "hungama", "sun ", "gemini", "etv", "discovery", "animal planet", "nat geo",
             "&tv", "mtv", "aaj tak", "ndtv", "tv9", "ntv", "sakshi",
         ),
+        extraUrl = "$BASE/index.m3u",
+        extraKeywords = KIDS_KW + DOC_KW,
+        priority = KIDS_KW + DOC_KW,
     ),
-    Lang("Kids", "$BASE/categories/kids.m3u"),
-    Lang("Documentary", "$BASE/categories/documentary.m3u"),
+    Lang(
+        "Kids", "$BASE/categories/kids.m3u",
+        extraUrl = "$BASE/countries/in.m3u",
+        extraKeywords = KIDS_KW,
+        priority = KIDS_KW,
+    ),
+    Lang(
+        "Documentary", "$BASE/categories/documentary.m3u",
+        extraUrl = "$BASE/countries/in.m3u",
+        extraKeywords = DOC_KW,
+        priority = DOC_KW,
+    ),
     Lang("Entertainment", "$BASE/categories/entertainment.m3u"),
     Lang("Movies", "$BASE/categories/movies.m3u"),
     Lang("News", "$BASE/categories/news.m3u"),
@@ -86,6 +115,15 @@ fun qualityOf(c: Channel): Int {
     if (n.contains("4k") || n.contains("2160") || n.contains("uhd")) return 2160
     return Regex("(\\d{3,4})p").find(n)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 }
+
+private fun rank(c: Channel, priority: List<String>): Int {
+    val n = c.name.lowercase()
+    val i = priority.indexOfFirst { n.contains(it) }
+    return if (i < 0) Int.MAX_VALUE else i
+}
+
+fun sortChannels(list: List<Channel>, priority: List<String>): List<Channel> =
+    list.sortedWith(compareBy<Channel>({ rank(it, priority) }, { it.name.lowercase() }))
 
 private fun attr(line: String, key: String): String? {
     val m = Regex(key + "=\"([^\"]*)\"").find(line)
@@ -160,7 +198,7 @@ object Repo {
                 list = list + extra.filter { matches(it, lang.extraKeywords) }
             }
             lang.customKey?.let { list = list + FavStore(ctx, it).load() }
-            list = list.distinctBy { it.url }.sortedBy { it.name.lowercase() }
+            list = sortChannels(list.distinctBy { it.url }, lang.priority)
             if (list.isEmpty()) error("No channels found")
             list
         }
@@ -236,7 +274,7 @@ object Repo {
                 withContext(Dispatchers.IO) { f.writeText(alive.joinToString("\n") { it.url }) }
             }
         }
-        val result = (alive + all.filter { it.url in customUrls }).sortedBy { it.name.lowercase() }
+        val result = sortChannels(alive + all.filter { it.url in customUrls }, lang.priority)
         return if (result.isEmpty()) Result.failure(Exception("No working channels right now")) else Result.success(result)
     }
 }
