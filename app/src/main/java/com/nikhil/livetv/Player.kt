@@ -54,6 +54,8 @@ import java.util.Locale
 private const val DEFAULT_UA =
     "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
+private val VIDEO_QUALITIES = listOf("Auto (best available)", "720p", "1080p", "4K")
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(channels: List<Channel>, start: Int) {
@@ -65,6 +67,7 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
     var note by remember { mutableStateOf<String?>(null) }
     var showInfo by remember { mutableStateOf(true) }
     var tick by remember { mutableIntStateOf(0) }
+    var qualityIndex by remember { mutableIntStateOf(0) }
 
     val http = remember {
         DefaultHttpDataSource.Factory()
@@ -72,18 +75,19 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(20000)
     }
+    val selector = remember {
+        DefaultTrackSelector(ctx).apply {
+            setParameters(
+                buildUponParameters()
+                    .setPreferredAudioLanguage("te")
+                    .setForceHighestSupportedBitrate(false)
+            )
+        }
+    }
     val exo = remember {
         ExoPlayer.Builder(ctx)
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
-            .setTrackSelector(
-                DefaultTrackSelector(ctx).also {
-                    it.setParameters(
-                        it.buildUponParameters()
-                            .setForceHighestSupportedBitrate(true)
-                            .setPreferredAudioLanguage("te")
-                    )
-                }
-            )
+            .setTrackSelector(selector)
             .build()
             .apply { playWhenReady = true }
     }
@@ -91,12 +95,12 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
     DisposableEffect(Unit) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_BUFFERING) status = "Loading…"
+                if (playbackState == Player.STATE_BUFFERING) status = "Loading stream…"
                 if (playbackState == Player.STATE_READY) status = ""
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                status = "This channel isn't working right now.\nPress ▲ / ▼ to try another channel."
+                status = "Stream unavailable or blocked by provider.\nTry another channel."
             }
         }
         exo.addListener(listener)
@@ -113,15 +117,30 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
         note = null
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setPreferredAudioLanguage("te")
             .build()
         http.setUserAgent(ch.userAgent ?: DEFAULT_UA)
         http.setDefaultRequestProperties(ch.referrer?.let { mapOf("Referer" to it) } ?: emptyMap())
         exo.setMediaItem(MediaItem.fromUri(ch.url))
         exo.prepare()
     }
+
+    LaunchedEffect(qualityIndex) {
+        val b = selector.buildUponParameters()
+        when (qualityIndex) {
+            1 -> b.setMaxVideoSize(1280, 720)
+            2 -> b.setMaxVideoSize(1920, 1080)
+            3 -> b.setMaxVideoSize(3840, 2160)
+            else -> b.setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
+        }
+        selector.setParameters(b)
+        note = "Video quality: " + VIDEO_QUALITIES[qualityIndex]
+        tick++
+    }
+
     LaunchedEffect(index, tick) {
         showInfo = true
-        delay(5000)
+        delay(6500)
         showInfo = false
     }
 
@@ -149,18 +168,23 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                         Key.DirectionLeft -> {
                             val options = exo.currentTracks.groups
                                 .filter { it.type == C.TRACK_TYPE_AUDIO }
-                                .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
+                                .flatMap { g ->
+                                    (0 until g.length)
+                                        .filter { g.isTrackSupported(it) }
+                                        .map { g to it }
+                                }
                             if (options.size < 2) {
-                                note = "No other audio language in this channel"
+                                note = "This stream has no alternate audio tracks. Telugu needs a Telugu stream/audio track."
                             } else {
                                 val cur = options.indexOfFirst { (g, i) -> g.isTrackSelected(i) }.coerceAtLeast(0)
-                                val (g, i) = options[(cur + 1) % options.size]
+                                val next = (cur + 1) % options.size
+                                val (g, i) = options[next]
                                 exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                                     .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i))
                                     .build()
                                 val f = g.getTrackFormat(i)
                                 val lang = f.language?.let { Locale(it).displayLanguage }?.takeIf { it.isNotBlank() }
-                                note = "Audio: " + (lang ?: f.label ?: "Track " + (((cur + 1) % options.size) + 1))
+                                note = "Audio: " + (lang ?: f.label ?: "Track ${next + 1}")
                             }
                             tick++
                             true
@@ -169,6 +193,10 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                             val added = teluguStore.toggle(ch)
                             note = if (added) "Added to Telugu list" else "Removed from Telugu list"
                             tick++
+                            true
+                        }
+                        Key.Menu -> {
+                            qualityIndex = (qualityIndex + 1) % VIDEO_QUALITIES.size
                             true
                         }
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
@@ -221,7 +249,7 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "▲ / ▼  change channel     OK  favourite     ◀  audio language     ▶  add to Telugu list     Back  channel list",
+                    "▲ / ▼ channel   OK favourite   ◀ audio language   MENU video quality   ▶ Telugu list   Back channel list",
                     color = Color(0xFF9A9AB0),
                     fontSize = 15.sp,
                 )
