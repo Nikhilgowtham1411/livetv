@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -95,6 +96,8 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
     var sel by rememberSaveable { mutableIntStateOf(1) } // 0 = favourites, 1.. = languages
     var retry by remember { mutableIntStateOf(0) }
     var ui by remember { mutableStateOf<Ui>(Ui.Loading) }
+    var progress by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val cats = remember { listOf("★ Favourites") + LANGS.map { it.label } }
 
     LaunchedEffect(sel, retry) {
@@ -107,12 +110,13 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                 Ui.Ok(f)
             }
         } else {
-            val r = Repo.load(ctx, LANGS[sel - 1])
+            progress = ""
+            val r = Repo.loadWorking(ctx, LANGS[sel - 1]) { d, t -> progress = "Checking channels $d / $t" }
             val list = r.getOrNull()
             ui = if (list != null) {
                 Ui.Ok(list)
             } else {
-                Ui.Err("Couldn't load channels.\nCheck your internet and try again.")
+                Ui.Err("No working channels found.\nCheck your internet and try again.")
             }
         }
     }
@@ -143,7 +147,17 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
         Spacer(Modifier.width(32.dp))
         Box(Modifier.weight(1f).fillMaxHeight()) {
             when (val s = ui) {
-                is Ui.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Accent)
+                is Ui.Loading -> Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CircularProgressIndicator(color = Accent)
+                    if (progress.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(progress, color = Color.White, fontSize = 18.sp)
+                        Text("Hiding channels that don't work…", color = Color(0xFF9A9AB0), fontSize = 14.sp)
+                    }
+                }
                 is Ui.Err -> Column(
                     Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -154,15 +168,31 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                         Text("Retry", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp))
                     }
                 }
-                is Ui.Ok -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(190.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(8.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    itemsIndexed(s.list, key = { _, c -> c.url }) { i, c ->
-                        ChannelCard(c) { onPlay(s.list, i) }
+                is Ui.Ok -> {
+                    val shown = if (query.isBlank()) s.list else s.list.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                    Column(Modifier.fillMaxSize()) {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            singleLine = true,
+                            placeholder = { Text("Search channel (maa, zee, history, kids…)") },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        if (shown.isEmpty()) {
+                            Text("No channel found", color = Color.White, fontSize = 20.sp, modifier = Modifier.padding(16.dp))
+                        }
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(190.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(8.dp),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            itemsIndexed(shown, key = { _, c -> c.url }) { i, c ->
+                                ChannelCard(c) { onPlay(shown, i) }
+                            }
+                        }
                     }
                 }
             }
