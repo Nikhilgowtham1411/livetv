@@ -98,6 +98,7 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
     var ui by remember { mutableStateOf<Ui>(Ui.Loading) }
     var progress by remember { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
+    var quality by rememberSaveable { mutableIntStateOf(0) } // 0 all, 1 HD, 2 Full HD, 3 4K
     val cats = remember { listOf("★ Favourites", "Official Apps") + LANGS.map { it.label } }
 
     LaunchedEffect(sel, retry) {
@@ -171,7 +172,11 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                     }
                 }
                 is Ui.Ok -> {
-                    val shown = if (query.isBlank()) s.list else s.list.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                    val minQ = when (quality) { 1 -> 720; 2 -> 1080; 3 -> 2160; else -> 0 }
+                    val shown = s.list.filter {
+                        (query.isBlank() || it.name.contains(query.trim(), ignoreCase = true)) &&
+                            (minQ == 0 || qualityOf(it) >= minQ)
+                    }
                     Column(Modifier.fillMaxSize()) {
                         OutlinedTextField(
                             value = query,
@@ -180,6 +185,24 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
                             placeholder = { Text("Search channel (maa, zee, history, kids…)") },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            listOf("All", "HD", "Full HD", "4K").forEachIndexed { i, label ->
+                                Focusable(
+                                    onClick = { quality = i },
+                                    shape = RoundedCornerShape(20.dp),
+                                    selected = i == quality,
+                                ) {
+                                    Text(
+                                        label,
+                                        color = if (i == quality) Accent else Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = if (i == quality) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                                    )
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(8.dp))
                         if (shown.isEmpty()) {
                             Text("No channel found", color = Color.White, fontSize = 20.sp, modifier = Modifier.padding(16.dp))
@@ -219,6 +242,20 @@ fun ChannelCard(c: Channel, onClick: () -> Unit) {
                     )
                 } else {
                     Text(c.name.take(1).uppercase(), color = Accent, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                }
+                val q = qualityOf(c)
+                if (q >= 720) {
+                    Text(
+                        if (q >= 2160) "4K" else if (q >= 1080) "FHD" else "HD",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .background(Accent, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
                 }
             }
             Text(

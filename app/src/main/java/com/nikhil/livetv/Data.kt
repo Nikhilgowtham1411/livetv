@@ -80,6 +80,13 @@ val LANGS = listOf(
     Lang("All India", "$BASE/countries/in.m3u"),
 )
 
+/** Vertical resolution parsed from the channel name, e.g. "(1080p)" -> 1080, "4K" -> 2160, unknown -> 0. */
+fun qualityOf(c: Channel): Int {
+    val n = c.name.lowercase()
+    if (n.contains("4k") || n.contains("2160") || n.contains("uhd")) return 2160
+    return Regex("(\\d{3,4})p").find(n)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+}
+
 private fun attr(line: String, key: String): String? {
     val m = Regex(key + "=\"([^\"]*)\"").find(line)
     return m?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }

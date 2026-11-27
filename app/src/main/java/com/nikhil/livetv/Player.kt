@@ -43,6 +43,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
@@ -71,6 +72,11 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
     val exo = remember {
         ExoPlayer.Builder(ctx)
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
+            .setTrackSelector(
+                DefaultTrackSelector(ctx).also {
+                    it.setParameters(it.buildUponParameters().setForceHighestSupportedBitrate(true))
+                }
+            )
             .build()
             .apply { playWhenReady = true }
     }
