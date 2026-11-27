@@ -93,14 +93,15 @@ fun Focusable(
 fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
     val ctx = LocalContext.current
     val favs = remember { FavStore(ctx) }
-    var sel by rememberSaveable { mutableIntStateOf(1) } // 0 = favourites, 1.. = languages
+    var sel by rememberSaveable { mutableIntStateOf(2) } // 0 = favourites, 1 = official apps, 2.. = playlists
     var retry by remember { mutableIntStateOf(0) }
     var ui by remember { mutableStateOf<Ui>(Ui.Loading) }
     var progress by remember { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    val cats = remember { listOf("★ Favourites") + LANGS.map { it.label } }
+    val cats = remember { listOf("★ Favourites", "Official Apps") + LANGS.map { it.label } }
 
     LaunchedEffect(sel, retry) {
+        if (sel == 1) return@LaunchedEffect
         ui = Ui.Loading
         if (sel == 0) {
             val f = favs.load()
@@ -111,7 +112,7 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
             }
         } else {
             progress = ""
-            val r = Repo.loadWorking(ctx, LANGS[sel - 1]) { d, t -> progress = "Checking channels $d / $t" }
+            val r = Repo.loadWorking(ctx, LANGS[sel - 2]) { d, t -> progress = "Checking channels $d / $t" }
             val list = r.getOrNull()
             ui = if (list != null) {
                 Ui.Ok(list)
@@ -146,7 +147,8 @@ fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
         }
         Spacer(Modifier.width(32.dp))
         Box(Modifier.weight(1f).fillMaxHeight()) {
-            when (val s = ui) {
+            when (val s = if (sel == 1) null else ui) {
+                null -> AppsGrid()
                 is Ui.Loading -> Column(
                     Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally,

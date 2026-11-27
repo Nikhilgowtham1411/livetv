@@ -7,6 +7,17 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <queries>
+        <package android:name="in.startv.hotstar" />
+        <package android:name="com.graymatrix.did" />
+        <package android:name="com.sonyliv" />
+        <package android:name="com.suntv.sunnxt" />
+        <package android:name="com.jio.jioplay.tv" />
+        <package android:name="com.google.android.youtube.tv" />
+        <package android:name="tv.pluto.android" />
+        <package android:name="com.mxtech.videoplayer.ad" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:banner="@drawable/banner"
