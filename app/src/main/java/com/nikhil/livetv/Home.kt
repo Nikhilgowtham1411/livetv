@@ -1,0 +1,202 @@
+package com.nikhil.livetv
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+
+sealed interface Ui {
+    data object Loading : Ui
+    data class Ok(val list: List<Channel>) : Ui
+    data class Err(val msg: String) : Ui
+}
+
+@Composable
+fun Focusable(
+    onClick: () -> Unit,
+    shape: Shape,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    content: @Composable BoxScope.(Boolean) -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.06f else 1f, label = "scale")
+    Box(
+        modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .onFocusChanged { focused = it.isFocused }
+            .clip(shape)
+            .background(
+                when {
+                    focused -> Color(0xFF2A2A40)
+                    selected -> Color(0xFF22222F)
+                    else -> Panel
+                }
+            )
+            .border(3.dp, if (focused) Accent else Color.Transparent, shape)
+            .clickable(onClick = onClick)
+    ) {
+        content(focused)
+    }
+}
+
+@Composable
+fun HomeScreen(onPlay: (List<Channel>, Int) -> Unit) {
+    val ctx = LocalContext.current
+    val favs = remember { FavStore(ctx) }
+    var sel by rememberSaveable { mutableIntStateOf(1) } // 0 = favourites, 1.. = languages
+    var retry by remember { mutableIntStateOf(0) }
+    var ui by remember { mutableStateOf<Ui>(Ui.Loading) }
+    val cats = remember { listOf("★ Favourites") + LANGS.map { it.label } }
+
+    LaunchedEffect(sel, retry) {
+        ui = Ui.Loading
+        if (sel == 0) {
+            val f = favs.load()
+            ui = if (f.isEmpty()) {
+                Ui.Err("No favourites yet.\nWhile watching a channel, press OK to add it.")
+            } else {
+                Ui.Ok(f)
+            }
+        } else {
+            val r = Repo.load(ctx, LANGS[sel - 1])
+            val list = r.getOrNull()
+            ui = if (list != null) {
+                Ui.Ok(list)
+            } else {
+                Ui.Err("Couldn't load channels.\nCheck your internet and try again.")
+            }
+        }
+    }
+
+    Row(Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 28.dp)) {
+        Column(Modifier.width(220.dp).fillMaxHeight()) {
+            Text("Live TV", color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(18.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+                itemsIndexed(cats) { i, label ->
+                    Focusable(
+                        onClick = { sel = i },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        selected = i == sel,
+                    ) {
+                        Text(
+                            label,
+                            color = if (i == sel) Accent else Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = if (i == sel) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.width(32.dp))
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            when (val s = ui) {
+                is Ui.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Accent)
+                is Ui.Err -> Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(s.msg, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(20.dp))
+                    Focusable(onClick = { retry++ }, shape = RoundedCornerShape(12.dp)) {
+                        Text("Retry", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp))
+                    }
+                }
+                is Ui.Ok -> LazyVerticalGrid(
+                    columns = GridCells.Adaptive(190.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(8.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    itemsIndexed(s.list, key = { _, c -> c.url }) { i, c ->
+                        ChannelCard(c) { onPlay(s.list, i) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChannelCard(c: Channel, onClick: () -> Unit) {
+    Focusable(onClick = onClick, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color(0xFF1E1E2C)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (c.logo != null) {
+                    AsyncImage(
+                        model = c.logo,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().padding(14.dp),
+                    )
+                } else {
+                    Text(c.name.take(1).uppercase(), color = Accent, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(
+                c.name,
+                color = Color.White,
+                fontSize = 15.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).height(42.dp),
+            )
+        }
+    }
+}
