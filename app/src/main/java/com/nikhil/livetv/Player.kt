@@ -55,6 +55,7 @@ private const val DEFAULT_UA =
 fun PlayerScreen(channels: List<Channel>, start: Int) {
     val ctx = LocalContext.current
     val favs = remember { FavStore(ctx) }
+    val teluguStore = remember { FavStore(ctx, "telugu_custom") }
     var index by remember { mutableIntStateOf(start) }
     var status by remember { mutableStateOf("Loading…") }
     var note by remember { mutableStateOf<String?>(null) }
@@ -129,6 +130,12 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                             index = (index - 1 + channels.size) % channels.size
                             true
                         }
+                        Key.DirectionRight -> {
+                            val added = teluguStore.toggle(ch)
+                            note = if (added) "Added to Telugu list" else "Removed from Telugu list"
+                            tick++
+                            true
+                        }
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                             val added = favs.toggle(ch)
                             note = if (added) "★ Added to favourites" else "Removed from favourites"
@@ -179,7 +186,7 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "▲ / ▼  change channel      OK  favourite      Back  channel list",
+                    "▲ / ▼  change channel     OK  favourite     ▶  add to Telugu list     Back  channel list",
                     color = Color(0xFF9A9AB0),
                     fontSize = 15.sp,
                 )

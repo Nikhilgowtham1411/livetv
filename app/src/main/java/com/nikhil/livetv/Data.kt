@@ -27,7 +27,19 @@ data class Channel(
     val referrer: String?,
 )
 
-data class Lang(val label: String, val url: String, val keywords: List<String>? = null)
+data class Lang(
+    val label: String,
+    val url: String,
+    val keywords: List<String>? = null,
+    val extraUrl: String? = null,
+    val extraKeywords: List<String> = emptyList(),
+    val customKey: String? = null,
+)
+
+val TELUGU_KW = listOf(
+    "telugu", "maa", "etv", "gemini", "sakshi", "ntv", "hmtv", "abn", "tv5", "10tv", "v6",
+    "studio n", "mahaa", "bhakti", "swarnamukhi", "zee cinemalu", "cvr", "tv9", "raj news",
+)
 
 private const val BASE = "https://iptv-org.github.io/iptv"
 
@@ -35,7 +47,12 @@ private const val UA =
     "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
 val LANGS = listOf(
-    Lang("Telugu", "$BASE/languages/tel.m3u"),
+    Lang(
+        "Telugu", "$BASE/languages/tel.m3u",
+        extraUrl = "$BASE/countries/in.m3u",
+        extraKeywords = TELUGU_KW,
+        customKey = "telugu_custom",
+    ),
     Lang(
         "Popular", "$BASE/countries/in.m3u",
         listOf(
@@ -107,24 +124,36 @@ object Repo {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    private fun fetch(ctx: Context, url: String): String {
+        val cache = File(ctx.cacheDir, "pl_" + url.hashCode() + ".m3u")
+        return try {
+            val req = Request.Builder().url(url).build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) error("HTTP " + resp.code)
+                resp.body!!.string()
+            }.also { cache.writeText(it) }
+        } catch (e: Exception) {
+            if (cache.exists()) cache.readText() else throw e
+        }
+    }
+
+    private fun matches(c: Channel, kw: List<String>): Boolean {
+        val n = c.name.lowercase()
+        val g = (c.group ?: "").lowercase()
+        return kw.any { n.contains(it) || g.contains(it) }
+    }
+
     suspend fun load(ctx: Context, lang: Lang): Result<List<Channel>> = withContext(Dispatchers.IO) {
-        val cache = File(ctx.cacheDir, "pl_" + lang.label.hashCode() + ".m3u")
         runCatching {
-            val body = try {
-                val req = Request.Builder().url(lang.url).build()
-                client.newCall(req).execute().use { resp ->
-                    if (!resp.isSuccessful) error("HTTP " + resp.code)
-                    resp.body!!.string()
-                }.also { cache.writeText(it) }
-            } catch (e: Exception) {
-                if (cache.exists()) cache.readText() else throw e
-            }
-            val all = parseM3u(body)
+            val all = parseM3u(fetch(ctx, lang.url))
             val kw = lang.keywords
-            val list = if (kw == null) all else all.filter { c ->
-                val n = c.name.lowercase()
-                kw.any { n.contains(it) }
+            var list = if (kw == null) all else all.filter { matches(it, kw) }
+            lang.extraUrl?.let { eu ->
+                val extra = runCatching { parseM3u(fetch(ctx, eu)) }.getOrDefault(emptyList())
+                list = list + extra.filter { matches(it, lang.extraKeywords) }
             }
+            lang.customKey?.let { list = list + FavStore(ctx, it).load() }
+            list = list.distinctBy { it.url }.sortedBy { it.name.lowercase() }
             if (list.isEmpty()) error("No channels found")
             list
         }
@@ -185,25 +214,28 @@ object Repo {
     suspend fun loadWorking(ctx: Context, lang: Lang, onProgress: (Int, Int) -> Unit): Result<List<Channel>> {
         val r = load(ctx, lang)
         val all = r.getOrNull() ?: return r
-        val f = File(ctx.cacheDir, "alive_" + lang.label.hashCode() + ".txt")
+        val customUrls = lang.customKey?.let { k -> FavStore(ctx, k).load().map { it.url }.toSet() } ?: emptySet()
+        val base = all.filter { it.url !in customUrls }
+        val f =File(ctx.cacheDir, "alive_" + lang.label.hashCode() + ".txt")
         val fresh = f.exists() && System.currentTimeMillis() - f.lastModified() < 45 * 60 * 1000L
         var alive: List<Channel> = emptyList()
         if (fresh) {
             val set = withContext(Dispatchers.IO) { f.readLines().toHashSet() }
-            alive = all.filter { it.url in set }
+            alive = base.filter { it.url in set }
         }
         if (alive.isEmpty()) {
-            alive = filterAlive(all, onProgress)
+            alive = filterAlive(base, onProgress)
             if (alive.isNotEmpty()) {
                 withContext(Dispatchers.IO) { f.writeText(alive.joinToString("\n") { it.url }) }
             }
         }
-        return if (alive.isEmpty()) Result.failure(Exception("No working channels right now")) else Result.success(alive)
+        val result = (alive + all.filter { it.url in customUrls }).sortedBy { it.name.lowercase() }
+        return if (result.isEmpty()) Result.failure(Exception("No working channels right now")) else Result.success(result)
     }
 }
 
-class FavStore(ctx: Context) {
-    private val sp = ctx.getSharedPreferences("favs", Context.MODE_PRIVATE)
+class FavStore(ctx: Context, name: String = "favs") {
+    private val sp = ctx.getSharedPreferences(name, Context.MODE_PRIVATE)
 
     fun load(): List<Channel> = runCatching {
         val a = JSONArray(sp.getString("list", "[]"))
