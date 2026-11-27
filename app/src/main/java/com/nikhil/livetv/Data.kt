@@ -51,6 +51,11 @@ val DOC_KW = listOf(
     "national geographic", "nat geo", "discovery", "history", "animal planet", "tlc", "sony bbc", "fyi",
 )
 
+val SPORTS_KW = listOf(
+    "star sports", "sony sports", "sony ten", "sports18", "sports 18", "dd sports", "willow", "cricket",
+    "ten sports", "espn", "eurosport", "sky sports", "bein", "fox sports", "t sports", "ptv sports",
+)
+
 val TELUGU_KW = listOf(
     "telugu", "maa", "etv", "gemini", "sakshi", "ntv", "hmtv", "abn", "tv5", "10tv", "v6",
     "studio n", "mahaa", "bhakti", "swarnamukhi", "zee cinemalu", "cvr", "tv9", "raj news",
@@ -85,6 +90,12 @@ val LANGS = listOf(
         extraUrl = "$BASE/countries/in.m3u",
         extraKeywords = KIDS_KW,
         priority = KIDS_KW,
+    ),
+    Lang(
+        "Sports", "$BASE/categories/sports.m3u",
+        extraUrl = "$BASE/countries/in.m3u",
+        extraKeywords = SPORTS_KW,
+        priority = SPORTS_KW,
     ),
     Lang(
         "Documentary", "$BASE/categories/documentary.m3u",
