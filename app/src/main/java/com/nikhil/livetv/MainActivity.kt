@@ -17,9 +17,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
-val Accent = Color(0xFFFF3D5A)
-val Bg = Color(0xFF0B0B12)
-val Panel = Color(0xFF16161F)
+val Accent = Color(0xFF69E0FF)
+val Bg = Color(0xFF070B14)
+val Panel = Color(0xFF121B2A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,9 +37,9 @@ fun App() {
     var playing by remember { mutableStateOf<Pair<List<Channel>, Int>?>(null) }
     Box(Modifier.fillMaxSize().background(Bg)) {
         val p = playing
-        if (p == null) {
-            HomeScreen { list, i -> playing = list to i }
-        } else {
+        // Keep Home composed behind the player so category/search/scroll state survives Back.
+        HomeScreen { list, i -> playing = list to i }
+        if (p != null) {
             BackHandler { playing = null }
             PlayerScreen(p.first, p.second)
         }
